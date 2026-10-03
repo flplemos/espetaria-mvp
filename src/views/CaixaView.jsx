@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 
 export default function CaixaView({ pedidos }) {
   const [showModal, setShowModal] = useState(false)
-  const [novoProd, setNovoProd] = useState({ nome: '', categoria: 'espetos', preco: '' })
+  const [novoProd, setNovoProd] = useState({ nome: '', categoria: 'espetos', preco: '', comboLimit: '' })
 
   const contasAbertas = pedidos.filter(p => p.status !== 'pago')
 
@@ -83,12 +83,15 @@ export default function CaixaView({ pedidos }) {
   const cadastrarProduto = async (e) => {
     e.preventDefault()
     if (!novoProd.nome || !novoProd.preco) return toast.error('Preencha os campos obrigatórios')
+    if (novoProd.categoria === 'combos' && !novoProd.comboLimit) return toast.error('Informe a quantidade de espetos do combo')
     
     const { error } = await supabase.from('produtos').insert([{
       nome: novoProd.nome,
       categoria: novoProd.categoria,
       preco: parseFloat(novoProd.preco.replace(',', '.')),
-      disponivel: true
+      disponivel: true,
+      is_combo: novoProd.categoria === 'combos',
+      combo_limit: novoProd.categoria === 'combos' ? parseInt(novoProd.comboLimit) : null
     }])
 
     if (error) {
@@ -97,7 +100,7 @@ export default function CaixaView({ pedidos }) {
     } else {
       toast.success('Produto cadastrado!')
       setShowModal(false)
-      setNovoProd({ nome: '', categoria: 'espetos', preco: '' })
+      setNovoProd({ nome: '', categoria: 'espetos', preco: '', comboLimit: '' })
     }
   }
 
@@ -200,7 +203,7 @@ export default function CaixaView({ pedidos }) {
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Categoria</label>
                 <select 
-                  value={novoProd.categoria} onChange={e => setNovoProd({...novoProd, categoria: e.target.value})}
+                  value={novoProd.categoria} onChange={e => setNovoProd({...novoProd, categoria: e.target.value, comboLimit: ''})}
                   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-orange outline-none"
                 >
                   <option value="espetos">Espetos</option>
@@ -209,6 +212,17 @@ export default function CaixaView({ pedidos }) {
                   <option value="combos">Combos</option>
                 </select>
               </div>
+              {novoProd.categoria === 'combos' && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Qtd. de Espetos no Combo</label>
+                  <input 
+                    type="number" min="1" required
+                    value={novoProd.comboLimit} onChange={e => setNovoProd({...novoProd, comboLimit: e.target.value})}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-orange outline-none"
+                    placeholder="Ex: 3"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Preço (R$)</label>
                 <input 

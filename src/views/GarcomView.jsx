@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getImageForProduct } from '../utils/imageMapper'
 import { Plus, Minus, Trash2, Send, CheckCircle2, UtensilsCrossed, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-const ESPETOS_COMBO = ["Espeto de Carne", "Espeto de Frango", "Espeto Misto", "Coraçãozinho"]
 
 export default function GarcomView({ pedidos }) {
   const [produtos, setProdutos] = useState([])
@@ -18,6 +17,8 @@ export default function GarcomView({ pedidos }) {
   const [comboModalProduto, setComboModalProduto] = useState(null)
   const [comboSelections, setComboSelections] = useState({})
 
+  const mesaInputRef = useRef(null)
+
   useEffect(() => {
     const fetchProdutos = async () => {
       const { data } = await supabase.from('produtos').select('*').eq('disponivel', true)
@@ -28,6 +29,8 @@ export default function GarcomView({ pedidos }) {
 
   const categorias = ['Todos', 'espetos', 'acompanhamentos', 'bebidas', 'combos']
 
+  const espetosDisponiveis = produtos.filter(p => p.categoria === 'espetos').map(p => p.nome)
+
   const produtosFiltrados = categoria === 'Todos' 
     ? produtos 
     : produtos.filter(p => categoria === 'combos' ? (p.categoria === 'combos' || p.is_combo) : p.categoria === categoria)
@@ -35,7 +38,7 @@ export default function GarcomView({ pedidos }) {
   const adicionarAoCarrinho = (produto) => {
     if (produto.is_combo) {
       setComboModalProduto(produto)
-      setComboSelections(ESPETOS_COMBO.reduce((acc, espeto) => ({ ...acc, [espeto]: 0 }), {}))
+      setComboSelections(espetosDisponiveis.reduce((acc, espeto) => ({ ...acc, [espeto]: 0 }), {}))
       return
     }
     adicionarProdutoDireto(produto, '')
@@ -52,13 +55,13 @@ export default function GarcomView({ pedidos }) {
   }
 
   const atualizarQuantidade = (id, delta) => {
-    setCarrinho(prev => prev.map(i => {
-      if (i.id === id) {
-        const novaQtd = i.quantidade + delta
-        return novaQtd > 0 ? { ...i, quantidade: novaQtd } : i
-      }
-      return i
-    }))
+    setCarrinho(prev => {
+      const item = prev.find(i => i.id === id)
+      if (!item) return prev
+      const novaQtd = item.quantidade + delta
+      if (novaQtd <= 0) return prev.filter(i => i.id !== id)
+      return prev.map(i => i.id === id ? { ...i, quantidade: novaQtd } : i)
+    })
   }
 
   const removerDoCarrinho = (id) => {
@@ -72,7 +75,11 @@ export default function GarcomView({ pedidos }) {
   const totalCarrinho = carrinho.reduce((acc, item) => acc + (item.produto.preco * item.quantidade), 0)
 
   const enviarPedido = async () => {
-    if (!mesa) return toast.error('Informe o número da mesa!')
+    if (!mesa) {
+      mesaInputRef.current?.focus()
+      mesaInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return toast.error('Informe o número da mesa!')
+    }
     if (carrinho.length === 0) return toast.error('Adicione itens ao carrinho!')
     
     setLoading(true)
@@ -132,6 +139,7 @@ export default function GarcomView({ pedidos }) {
     const obs = `Escolhas: ${escolhas}`
     adicionarProdutoDireto(comboModalProduto, obs)
     setComboModalProduto(null)
+    toast.success(`${comboModalProduto.nome} adicionado!`, { id: 'add', duration: 1500, position: 'bottom-center' })
   }
 
   const pedidosProntos = pedidos.filter(p => p.status === 'pronto')
@@ -144,6 +152,7 @@ export default function GarcomView({ pedidos }) {
           <div className="flex-1">
             <label className="block text-sm font-semibold text-slate-700 mb-1">Mesa *</label>
             <input 
+              ref={mesaInputRef}
               type="text" 
               placeholder="Ex: 04" 
               value={mesa}
@@ -206,12 +215,43 @@ export default function GarcomView({ pedidos }) {
                     {produto.descricao && <p className="text-xs text-slate-500 line-clamp-2 mb-2">{produto.descricao}</p>}
                     <p className="text-brand-orange font-bold">R$ {Number(produto.preco).toFixed(2)}</p>
                   </div>
-                  <button 
-                    onClick={() => adicionarAoCarrinho(produto)}
-                    className="mt-3 w-full flex items-center justify-center gap-1 bg-slate-100 hover:bg-brand-orange hover:text-white text-slate-700 font-medium py-2 rounded-lg transition-colors"
-                  >
-                    <Plus size={18} /> {produto.is_combo ? 'Montar' : 'Adicionar'}
-                  </button>
+                  {(() => {
+                    const itemNoCarrinho = carrinho.find(i => i.produto.id === produto.id && i.observacao === '')
+                    const qtd = itemNoCarrinho ? itemNoCarrinho.quantidade : 0
+
+                    if (produto.is_combo) {
+                      return (
+                        <button 
+                          onClick={() => adicionarAoCarrinho(produto)}
+                          className="mt-3 w-full flex items-center justify-center gap-1 bg-slate-100 hover:bg-brand-orange hover:text-white text-slate-700 font-medium py-2 rounded-lg transition-colors"
+                        >
+                          <Plus size={18} /> Montar
+                        </button>
+                      )
+                    }
+
+                    if (qtd > 0) {
+                      return (
+                        <div className="mt-3 w-full flex items-center justify-between bg-brand-orange text-white py-1 px-1 rounded-lg">
+                          <button onClick={() => atualizarQuantidade(itemNoCarrinho.id, -1)} className="p-2 hover:bg-white/20 rounded-md transition-colors"><Minus size={18} /></button>
+                          <span className="font-bold">{qtd}</span>
+                          <button onClick={() => atualizarQuantidade(itemNoCarrinho.id, 1)} className="p-2 hover:bg-white/20 rounded-md transition-colors"><Plus size={18} /></button>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <button 
+                        onClick={() => {
+                          adicionarAoCarrinho(produto)
+                          toast.success(`${produto.nome} adicionado!`, { id: 'add', duration: 1500, position: 'bottom-center' })
+                        }}
+                        className="mt-3 w-full flex items-center justify-center gap-1 bg-slate-100 hover:bg-brand-orange hover:text-white text-slate-700 font-medium py-2 rounded-lg transition-colors"
+                      >
+                        <Plus size={18} /> Adicionar
+                      </button>
+                    )
+                  })()}
                 </div>
               </div>
             )
@@ -337,7 +377,7 @@ export default function GarcomView({ pedidos }) {
               </div>
 
               <div className="space-y-3">
-                {ESPETOS_COMBO.map(espeto => (
+                {espetosDisponiveis.map(espeto => (
                   <div key={espeto} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
                     <span className="font-semibold text-slate-700">{espeto}</span>
                     <div className="flex items-center gap-3 bg-white rounded-lg p-1 border border-slate-200">

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { DollarSign, Plus, Receipt, X } from 'lucide-react'
+import { DollarSign, Plus, Receipt, X, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function CaixaView({ pedidos }) {
@@ -9,15 +9,50 @@ export default function CaixaView({ pedidos }) {
 
   const contasAbertas = pedidos.filter(p => p.status !== 'pago')
 
+  // Agrupar pedidos pela mesma mesa
+  const contasPorMesa = contasAbertas.reduce((acc, pedido) => {
+    const key = pedido.mesa.trim().toUpperCase() // Normalizar nome da mesa
+    if (!acc[key]) {
+      acc[key] = {
+        mesa: pedido.mesa,
+        cliente: pedido.cliente,
+        pedidosIds: [],
+        itens: [],
+        temPendenteOuPreparando: false,
+        temPronto: false
+      }
+    }
+    
+    acc[key].pedidosIds.push(pedido.id)
+    if (pedido.itens_pedido) {
+      acc[key].itens = [...acc[key].itens, ...pedido.itens_pedido]
+    }
+    
+    if (!acc[key].cliente && pedido.cliente) {
+      acc[key].cliente = pedido.cliente
+    }
+
+    if (pedido.status === 'pendente' || pedido.status === 'preparando') {
+      acc[key].temPendenteOuPreparando = true
+    }
+    if (pedido.status === 'pronto') {
+      acc[key].temPronto = true
+    }
+
+    return acc
+  }, {})
+
+  const mesasAgrupadas = Object.values(contasPorMesa)
+
   const calcularTotal = (itens) => {
     if (!itens) return 0
     return itens.reduce((acc, item) => acc + (item.preco_unitario * item.quantidade), 0)
   }
 
-  const fecharConta = (id) => {
+  const fecharConta = (pedidosIds) => {
     toast((t) => (
       <div className="flex flex-col gap-3">
-        <span className="font-bold text-slate-800">Confirma o recebimento e fechamento desta conta?</span>
+        <span className="font-bold text-slate-800">Confirma o recebimento e fechamento desta conta ({pedidosIds.length} {pedidosIds.length > 1 ? 'pedidos agrupados' : 'pedido'})?</span>
         <div className="flex gap-2 justify-end">
           <button 
             className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition-colors"
@@ -29,8 +64,13 @@ export default function CaixaView({ pedidos }) {
             className="px-3 py-1.5 bg-brand-green hover:bg-green-600 text-white rounded-lg text-sm font-bold transition-colors"
             onClick={async () => {
               toast.dismiss(t.id)
-              await supabase.from('pedidos').update({ status: 'pago' }).eq('id', id)
-              toast.success('Conta fechada com sucesso!')
+              const { error } = await supabase.from('pedidos').update({ status: 'pago' }).in('id', pedidosIds)
+              if (error) {
+                toast.error('Erro ao fechar conta')
+                console.error(error)
+              } else {
+                toast.success('Conta fechada com sucesso!')
+              }
             }}
           >
             Confirmar
@@ -76,35 +116,44 @@ export default function CaixaView({ pedidos }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {contasAbertas.length === 0 ? (
+        {mesasAgrupadas.length === 0 ? (
           <div className="col-span-full py-12 text-center text-slate-400 font-medium bg-white rounded-xl border border-slate-200">
             Nenhuma conta aberta no momento.
           </div>
         ) : (
-          contasAbertas.map(pedido => {
-            const total = calcularTotal(pedido.itens_pedido)
+          mesasAgrupadas.map((conta, index) => {
+            const total = calcularTotal(conta.itens)
             return (
-              <div key={pedido.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+              <div key={index} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                 <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold text-xl text-slate-800">{pedido.mesa}</h3>
-                    {pedido.cliente && <p className="text-slate-500">{pedido.cliente}</p>}
+                    <h3 className="font-bold text-xl text-slate-800">{conta.mesa}</h3>
+                    {conta.cliente && <p className="text-slate-500 flex items-center gap-1"><Users size={14}/> {conta.cliente}</p>}
                   </div>
-                  <div className={`px-2 py-1 rounded text-xs font-bold uppercase ${
-                    pedido.status === 'entregue' ? 'bg-brand-green/20 text-brand-green' : 
-                    pedido.status === 'pronto' ? 'bg-blue-100 text-blue-600' :
-                    'bg-brand-orange/20 text-brand-orange-light'
-                  }`}>
-                    {pedido.status}
+                  <div className="flex flex-col gap-1 items-end">
+                    {conta.pedidosIds.length > 1 && (
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">{conta.pedidosIds.length} Pedidos</span>
+                    )}
+                    {conta.temPendenteOuPreparando ? (
+                      <div className="px-2 py-1 rounded text-xs font-bold uppercase bg-brand-orange/20 text-brand-orange-light">ATIVOS / PREPARANDO</div>
+                    ) : conta.temPronto ? (
+                      <div className="px-2 py-1 rounded text-xs font-bold uppercase bg-blue-100 text-blue-600">PRONTO PARA ENTREGA</div>
+                    ) : (
+                      <div className="px-2 py-1 rounded text-xs font-bold uppercase bg-brand-green/20 text-brand-green">ENTREGUE</div>
+                    )}
                   </div>
                 </div>
                 
                 <div className="p-4 flex-1">
                   <ul className="space-y-2 mb-4">
-                    {pedido.itens_pedido?.map(item => (
+                    {conta.itens?.map(item => (
                       <li key={item.id} className="flex justify-between text-sm">
-                        <span className="text-slate-600">{item.quantidade}x {item.nome_produto}</span>
-                        <span className="font-medium text-slate-800">R$ {(item.preco_unitario * item.quantidade).toFixed(2)}</span>
+                        <span className="text-slate-600 leading-tight">
+                          {item.quantidade}x {item.nome_produto}
+                        </span>
+                        <span className="font-medium text-slate-800 ml-2 whitespace-nowrap">
+                          R$ {(item.preco_unitario * item.quantidade).toFixed(2)}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -112,11 +161,11 @@ export default function CaixaView({ pedidos }) {
 
                 <div className="p-4 bg-slate-900 text-white">
                   <div className="flex justify-between items-center mb-4">
-                    <span className="text-slate-300">Total</span>
+                    <span className="text-slate-300">Total da Mesa</span>
                     <span className="text-2xl font-bold text-brand-green">R$ {total.toFixed(2)}</span>
                   </div>
                   <button 
-                    onClick={() => fecharConta(pedido.id)}
+                    onClick={() => fecharConta(conta.pedidosIds)}
                     className="w-full py-3 bg-brand-green hover:bg-green-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                   >
                     <DollarSign size={20} /> Receber e Fechar

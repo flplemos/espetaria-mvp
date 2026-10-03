@@ -83,8 +83,9 @@ export default function CozinhaView({ pedidos }) {
                 <span className="font-medium text-slate-700">{item.nome_produto}</span>
               </div>
               {item.observacao && (
-                <div className="mt-1 ml-9 text-red-600 text-sm font-bold flex items-center gap-1 bg-red-50 p-1.5 rounded-md">
-                  <AlertTriangle size={14} /> {item.observacao}
+                <div className="mt-2 ml-8 text-red-700 text-sm font-bold flex items-start gap-2 bg-red-100 p-2.5 rounded-lg border border-red-200 shadow-sm leading-snug">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" /> 
+                  <span className="whitespace-pre-wrap">{item.observacao}</span>
                 </div>
               )}
             </li>

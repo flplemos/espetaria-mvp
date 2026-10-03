@@ -220,15 +220,15 @@ export default function GarcomView({ pedidos }) {
       </div>
 
       <div className="lg:col-span-1">
-        <div className="sticky top-20 space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto hide-scrollbar pb-6">
+        <div className="sticky top-20 flex flex-col h-[calc(100vh-6rem)] pb-6 gap-6">
           {/* Carrinho */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col max-h-[50vh] min-h-[300px]">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col flex-1">
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
               <h2 className="font-bold text-lg">Comanda</h2>
               <span className="bg-slate-800 px-2 py-1 rounded text-sm">{carrinho.length} itens</span>
             </div>
             
-            <div className="p-4 flex-1 overflow-auto space-y-4">
+            <div className="p-4 pr-2 flex-1 overflow-y-auto space-y-4 custom-scrollbar">
               {carrinho.length === 0 ? (
                 <p className="text-center text-slate-500 py-8">Nenhum item adicionado.</p>
               ) : (

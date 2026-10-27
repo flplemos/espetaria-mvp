@@ -54,6 +54,20 @@ npm run dev
 
 Abra `http://localhost:5173` no seu navegador de preferência. Você pode abrir abas separadas simulando diferentes dispositivos (um celular para o Garçom, uma tela grande para a Cozinha) para ver o tempo real (Realtime) funcionando perfeitamente!
 
+## ⏰ Keep-alive do Supabase (plano Free)
+
+O Supabase pausa projetos Free após ~7 dias sem atividade. Para evitar isso, a função `api/keepalive.js` roda **1x por dia (12:00 UTC)** como [Vercel Cron](https://vercel.com/docs/cron-jobs) (configurado em `vercel.json`) e faz uma leitura leve no banco (`produtos?select=id&limit=1`).
+
+Variáveis de ambiente na Vercel (*Project → Settings → Environment Variables*, ambiente **Production**):
+
+| Variável | Obrigatória | Uso |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | sim | já usada pelo app |
+| `VITE_SUPABASE_ANON_KEY` | sim | já usada pelo app |
+| `CRON_SECRET` | recomendada | qualquer string aleatória; a Vercel envia `Authorization: Bearer <CRON_SECRET>` e a função recusa chamadas sem ele |
+
+Para conferir: *Project → Settings → Cron Jobs → Run*, ou veja os logs da função.
+
 ## 📦 Script para Produção
 Caso queira gerar um build otimizado para deploy em serviços como **Vercel** ou **Netlify**:
 
